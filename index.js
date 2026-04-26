@@ -1,27 +1,46 @@
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
-const pino = require("pino")
-const qrcode = require("qrcode-terminal")
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
+const pino = require("pino");
 
 async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState("auth")
+    const { state, saveCreds } = await useMultiFileAuthState("auth_info");
 
     const sock = makeWASocket({
+        logger: pino({ level: "silent" }),
         auth: state,
-        logger: pino({ level: "silent" })
-    })
+        printQRInTerminal: true
+    });
 
-    sock.ev.on("connection.update", ({ connection, qr }) => {
-        if (qr) {
-            qrcode.generate(qr, { small: true })
-            console.log("Escanea este QR con WhatsApp")
-        }
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", (update) => {
+        const { connection } = update;
 
         if (connection === "open") {
-            console.log("Bot conectado correctamente")
+            console.log("✅ Bot conectado correctamente");
         }
-    })
 
-    sock.ev.on("creds.update", saveCreds)
+        if (connection === "close") {
+            console.log("❌ Conexión cerrada, reiniciando...");
+            startBot();
+        }
+    });
+
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message) return;
+
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+        if (!text) return;
+
+        if (text === "!ping") {
+            await sock.sendMessage(msg.key.remoteJid, { text: "🏓 Pong!" });
+        }
+
+        if (text === "!hola") {
+            await sock.sendMessage(msg.key.remoteJid, { text: "👋 Hola, soy tu bot RPG" });
+        }
+    });
 }
 
-startBot()
+startBot();
