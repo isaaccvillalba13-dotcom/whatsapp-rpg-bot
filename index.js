@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 
 async function startBot() {
@@ -6,26 +6,25 @@ async function startBot() {
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
         logger: pino({ level: "silent" })
     });
 
     sock.ev.on("creds.update", saveCreds);
 
     sock.ev.on("connection.update", (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, qr } = update;
 
         if (qr) {
-            console.log("📲 Escanea este QR desde WhatsApp");
+            console.log("📲 ESCANEA ESTE QR EN WHATSAPP:");
+            console.log(qr);
         }
 
         if (connection === "open") {
-            console.log("✅ Bot conectado");
+            console.log("✅ Bot conectado correctamente");
         }
 
         if (connection === "close") {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-            console.log("❌ Conexión cerrada:", reason);
+            console.log("❌ Conexión cerrada, reiniciando...");
             startBot();
         }
     });
