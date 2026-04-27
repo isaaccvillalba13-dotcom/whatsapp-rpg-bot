@@ -1,76 +1,72 @@
-const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    DisconnectReason,
-    fetchLatestBaileysVersion
-} = require("@whiskeysockets/baileys");
+import makeWASocket, { useMultiFileAuthState, DisconnectReason, Browsers } from '@whiskeysockets/baileys'
+import pino from 'pino'
 
-const pino = require("pino");
+const NUMERO = '595993633752' // Tu número ya puesto
 
-async function startBot() {
-    const { state, saveCreds } = await useMultiFileAuthState("auth_info");
-
-    const { version } = await fetchLatestBaileysVersion();
+async function iniciarBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info')
 
     const sock = makeWASocket({
-        version,
         auth: state,
-        logger: pino({ level: "silent" }),
-        browser: ["Ubuntu", "Chrome", "1.0.0"]
-    });
+        logger: pino({ level: 'silent' }),
+        browser: Browsers.macOS('Desktop'),
+        printQRInTerminal: false
+    })
 
-    sock.ev.on("creds.update", saveCreds);
+    // Si no está registrado, pide el código de 8 dígitos
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            const code = await sock.requestPairingCode(NUMERO)
+            console.log('\n===================================')
+            console.log(`🔑 Código de vinculación: ${code}`)
+            console.log('===================================')
+            console.log('1. Abrí WhatsApp → Ajustes')
+            console.log('2. Dispositivos vinculados → Vincular dispositivo')
+            console.log('3. "Vincular con el número de teléfono"')
+            console.log(`4. Ingresá el código: ${code}\n`)
+        }, 3000)
+    }
 
-    const phoneNumber = "595993633752";
+    sock.ev.on('creds.update', saveCreds)
 
-    // 🔑 IMPORTANTE: esperar conexión antes de pedir código
-    sock.ev.on("connection.update", async (update) => {
-        const { connection, lastDisconnect } = update;
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update
 
-        if (connection === "open") {
-            console.log("✅ Bot conectado correctamente");
-        }
-
-        if (connection === "close") {
-            const reason = lastDisconnect?.error?.output?.statusCode;
-
-            console.log("❌ Conexión cerrada. Motivo:", reason);
-
-            if (reason !== DisconnectReason.loggedOut) {
-                startBot();
+        if (connection === 'open') {
+            console.log('✅ Bot conectado a WhatsApp correctamente')
+        } else if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut
+            console.log('Conexión cerrada. Razón:', lastDisconnect?.error)
+            if (shouldReconnect) {
+                console.log('Reintentando conexión...')
+                iniciarBot()
             } else {
-                console.log("⚠️ Sesión inválida. Borra auth_info y reinicia.");
+                console.log('Sesión cerrada. Borra la carpeta auth_info y volvé a correr.')
             }
         }
+    })
 
-        // 🔥 AQUÍ se genera el código correctamente
-        if (!sock.authState.creds.registered) {
-            try {
-                const code = await sock.requestPairingCode(phoneNumber);
+    // Escuchar mensajes
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0]
+        if (!msg.message || msg.key.fromMe) return
 
-                if (code) {
-                    console.log("\n🔐 CÓDIGO DE VINCULACIÓN:");
-                    console.log(code);
-                    console.log("\n👉 Escríbelo en WhatsApp > Dispositivos vinculados\n");
-                }
-            } catch (err) {
-                console.log("❌ No se pudo generar código:", err.message);
-            }
+        const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || ''
+        const remitente = msg.key.remoteJid
+
+        console.log(`📩 ${remitente}: ${texto}`)
+
+        // Comandos básicos de ejemplo
+        if (texto.toLowerCase() === 'hola') {
+            await sock.sendMessage(remitente, {
+                text: 'Hola 👋 Soy tu bot. Estoy funcionando con pairing code.'
+            })
         }
-    });
 
-    sock.ev.on("messages.upsert", async ({ messages }) => {
-        const msg = messages[0];
-        if (!msg.message) return;
-
-        const text =
-            msg.message.conversation ||
-            msg.message.extendedTextMessage?.text;
-
-        if (text === "!ping") {
-            await sock.sendMessage(msg.key.remoteJid, { text: "🏓 Pong!" });
+        if (texto.toLowerCase() === 'ping') {
+            await sock.sendMessage(remitente, { text: 'pong 🏓' })
         }
-    });
+    })
 }
 
-startBot();
+iniciarBot()
