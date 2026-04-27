@@ -6,6 +6,8 @@ const {
 
 const pino = require("pino");
 
+let pairingCodeUsed = false;
+
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info");
 
@@ -15,31 +17,38 @@ async function startBot() {
         browser: ["Ubuntu", "Chrome", "1.0.0"]
     });
 
-    // Guardar credenciales
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔑 CÓDIGO DE VINCULACIÓN (8 dígitos)
+    // 🔑 SOLO UN CÓDIGO (no repetitivo)
     const phoneNumber = "595993633752";
 
     setTimeout(async () => {
         try {
-            if (!sock.authState.creds.registered) {
+            if (!sock.authState.creds.registered && !pairingCodeUsed) {
+                pairingCodeUsed = true;
+
                 const code = await sock.requestPairingCode(phoneNumber);
-                console.log("\n🔐 TU CÓDIGO DE VINCULACIÓN:");
+
+                console.log("\n🔐 CÓDIGO DE VINCULACIÓN (VÁLIDO 15 SEGUNDOS):");
                 console.log(code);
-                console.log("\n👉 Ve a WhatsApp > Dispositivos vinculados > Vincular con código\n");
+                console.log("\n⏳ Tienes 15 segundos para vincularlo en WhatsApp...\n");
+
+                // 🔥 bloquea regeneración
+                setTimeout(() => {
+                    console.log("⌛ Ventana de código cerrada");
+                }, 15000);
             }
         } catch (err) {
             console.log("❌ Error generando código:", err);
         }
-    }, 3000);
+    }, 2000);
 
-    // Conexión
+    // CONEXIÓN
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect } = update;
 
         if (connection === "open") {
-            console.log("✅ Bot conectado correctamente a WhatsApp");
+            console.log("✅ Bot conectado correctamente");
         }
 
         if (connection === "close") {
@@ -48,15 +57,14 @@ async function startBot() {
             console.log("❌ Conexión cerrada. Motivo:", reason);
 
             if (reason !== DisconnectReason.loggedOut) {
-                console.log("🔄 Reconectando...");
                 startBot();
             } else {
-                console.log("⚠️ Sesión eliminada. Borra auth_info y vuelve a iniciar.");
+                console.log("⚠️ Sesión inválida. Borra auth_info y reinicia.");
             }
         }
     });
 
-    // Mensajes
+    // MENSAJES
     sock.ev.on("messages.upsert", async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message) return;
@@ -64,8 +72,6 @@ async function startBot() {
         const text =
             msg.message.conversation ||
             msg.message.extendedTextMessage?.text;
-
-        if (!text) return;
 
         if (text === "!ping") {
             await sock.sendMessage(msg.key.remoteJid, { text: "🏓 Pong!" });
