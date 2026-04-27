@@ -1,24 +1,31 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    fetchLatestBaileysVersion
+} = require("@whiskeysockets/baileys");
+
 const pino = require("pino");
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("auth_info");
 
+    const { version } = await fetchLatestBaileysVersion();
+
     const sock = makeWASocket({
+        version,
         auth: state,
-        logger: pino({ level: "silent" })
+        logger: pino({ level: "silent" }),
+        browser: ["Ubuntu", "Chrome", "1.0.0"]
     });
 
     sock.ev.on("creds.update", saveCreds);
 
-    // 📲 QR MANUAL (ESTO ES LO QUE SÍ FUNCIONA)
-    sock.ev.on("connection.update", (update) => {
-        const { connection, qr, lastDisconnect } = update;
+    const phoneNumber = "595993633752";
 
-        if (qr) {
-            console.log("\n📲 ESCANEA ESTE QR EN WHATSAPP:\n");
-            console.log(qr);
-        }
+    // 🔑 IMPORTANTE: esperar conexión antes de pedir código
+    sock.ev.on("connection.update", async (update) => {
+        const { connection, lastDisconnect } = update;
 
         if (connection === "open") {
             console.log("✅ Bot conectado correctamente");
@@ -35,6 +42,21 @@ async function startBot() {
                 console.log("⚠️ Sesión inválida. Borra auth_info y reinicia.");
             }
         }
+
+        // 🔥 AQUÍ se genera el código correctamente
+        if (!sock.authState.creds.registered) {
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+
+                if (code) {
+                    console.log("\n🔐 CÓDIGO DE VINCULACIÓN:");
+                    console.log(code);
+                    console.log("\n👉 Escríbelo en WhatsApp > Dispositivos vinculados\n");
+                }
+            } catch (err) {
+                console.log("❌ No se pudo generar código:", err.message);
+            }
+        }
     });
 
     sock.ev.on("messages.upsert", async ({ messages }) => {
@@ -47,10 +69,6 @@ async function startBot() {
 
         if (text === "!ping") {
             await sock.sendMessage(msg.key.remoteJid, { text: "🏓 Pong!" });
-        }
-
-        if (text === "!hola") {
-            await sock.sendMessage(msg.key.remoteJid, { text: "👋 Hola, soy tu bot RPG" });
         }
     });
 }
