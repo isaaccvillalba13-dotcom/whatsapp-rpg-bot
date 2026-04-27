@@ -6,7 +6,8 @@ async function startBot() {
 
     const sock = makeWASocket({
         auth: state,
-        logger: pino({ level: "silent" })
+        logger: pino({ level: "silent" }),
+        browser: ["Ubuntu", "Chrome", "1.0.0"]
     });
 
     sock.ev.on("creds.update", saveCreds);
@@ -15,11 +16,12 @@ async function startBot() {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
-            console.log("📲 Escanea el QR en WhatsApp");
+            console.log("📲 ESCANEA ESTE QR:");
+            console.log(qr);
         }
 
         if (connection === "open") {
-            console.log("✅ Bot conectado correctamente");
+            console.log("✅ CONECTADO A WHATSAPP");
         }
 
         if (connection === "close") {
@@ -27,11 +29,10 @@ async function startBot() {
 
             console.log("❌ Conexión cerrada. Motivo:", reason);
 
-            // SOLO reconectar si no es logout
             if (reason !== DisconnectReason.loggedOut) {
-                startBot();
+                setTimeout(() => startBot(), 3000); // evita loop rápido
             } else {
-                console.log("⚠️ Sesión cerrada. Vuelve a escanear el QR.");
+                console.log("⚠️ Sesión inválida. Borra auth_info y vuelve a iniciar.");
             }
         }
     });
