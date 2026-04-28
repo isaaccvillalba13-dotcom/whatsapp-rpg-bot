@@ -47,7 +47,7 @@ async function conectarBot() {
 
     // ★ CÓDIGO DE 8 DÍGITOS AUTOMÁTICO ★
     if (!sock.authState.creds.registered) {
-        await new Promise(r => setTimeout(r, 3000))
+        await new Promise(r => setTimeout(r, 15000))
         try {
             const code = await sock.requestPairingCode(OWNER_NUMBER)
             console.log('\n★━━━━━━━━━━━━━━━━━━━━━━★')
