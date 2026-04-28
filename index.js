@@ -1,3 +1,5 @@
+globalThis.crypto = require('crypto').webcrypto
+
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
@@ -10,7 +12,7 @@ const fs = require('fs')
 
 const logger = pino({ level: 'silent' })
 
-// ★ TU NÚMERO VA EN VARIABLES DE ENTORNO EN RAILWAY ★
+// ★ TU NÚMERO (sin + ni espacios) ★
 const OWNER_NUMBER = process.env.OWNER_NUMBER || '595993633752'
 
 const DB_PATH = './database.json'
@@ -110,6 +112,6 @@ async function conectarBot() {
 }
 
 conectarBot().catch(err => {
-    console.error('Error fatal:', err.message)
+    console.error('❌ Error fatal:', err.message)
     process.exit(1)
 })
