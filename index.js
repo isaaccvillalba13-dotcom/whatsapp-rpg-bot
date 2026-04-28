@@ -1,12 +1,9 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeInMemoryStore } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
 const pino = require('pino')
 const fs = require('fs')
-const path = require('path')
 
-// ★ CONFIGURACIÓN DEL OWNER ★
-const OWNER_NUMBER = '595993633752' // Cambia por tu número sin + ni espacios
+const OWNER_NUMBER = '595993633752' // Tu número sin + ni espacios
 
-// Base de datos simple en JSON
 const DB_PATH = './database.json'
 function loadDB() {
   if (!fs.existsSync(DB_PATH)) fs.writeFileSync(DB_PATH, JSON.stringify({}))
@@ -16,7 +13,6 @@ function saveDB(data) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2))
 }
 
-// Cargar comandos
 const rpgCommands = require('./commands/rpg')
 
 async function startBot() {
@@ -25,26 +21,24 @@ async function startBot() {
   const sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
-    // ★ VINCULACIÓN POR CÓDIGO DE 8 DÍGITOS ★
-    linkingMethod: {
-      type: 'code',
-      phoneNumber: OWNER_NUMBER
-    }
+    logger: pino({ level: 'silent' })
   })
+
+  // ★ SOLICITAR CÓDIGO DE 8 DÍGITOS ★
+  if (!sock.authState.creds.registered) {
+    await new Promise(r => setTimeout(r, 3000))
+    const code = await sock.requestPairingCode(OWNER_NUMBER)
+    console.log('\n★━━━━━━━━━━━━━━━━━━━━━━★')
+    console.log('  CÓDIGO DE VINCULACIÓN:')
+    console.log(`       ${code}`)
+    console.log('★━━━━━━━━━━━━━━━━━━━━━━★')
+    console.log('WhatsApp → Dispositivos vinculados → Vincular con número\n')
+  }
 
   sock.ev.on('creds.update', saveCreds)
 
   sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr, pairingCode } = update
-
-    if (pairingCode) {
-      console.log('\n★━━━━━━━━━━━━━━━━━━━━━━★')
-      console.log('  CÓDIGO DE VINCULACIÓN:')
-      console.log(`  ➤  ${pairingCode}`)
-      console.log('★━━━━━━━━━━━━━━━━━━━━━━★')
-      console.log('Ve a WhatsApp → Dispositivos vinculados → Vincular con número\n')
-    }
+    const { connection, lastDisconnect } = update
 
     if (connection === 'close') {
       const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
@@ -57,7 +51,7 @@ async function startBot() {
     }
 
     if (connection === 'open') {
-      console.log('✅ ★VĮŁŁĄŁƁĄ★ Bot conectado a WhatsApp!')
+      console.log('✅ ★VĮŁŁĄŁƁĄ★ Bot conectado!')
     }
   })
 
@@ -65,7 +59,6 @@ async function startBot() {
     const msg = messages[0]
     if (!msg.message) return
 
-    // ★ SOLO FUNCIONA EN GRUPOS ★
     const isGroup = msg.key.remoteJid.endsWith('@g.us')
     if (!isGroup) return
 
@@ -73,7 +66,6 @@ async function startBot() {
     const sender = msg.key.participant || msg.key.remoteJid
     const senderNumber = sender.replace('@s.whatsapp.net', '')
 
-    // Obtener texto del mensaje
     const body = msg.message?.conversation ||
       msg.message?.extendedTextMessage?.text ||
       msg.message?.imageMessage?.caption || ''
@@ -86,11 +78,8 @@ async function startBot() {
 
     const db = loadDB()
     const isOwner = senderNumber === OWNER_NUMBER
-
-    // Función para responder
     const reply = (text) => sock.sendMessage(from, { text }, { quoted: msg })
 
-    // ★ ENRUTAR COMANDOS RPG ★
     await rpgCommands({ command, args, sender, senderNumber, from, reply, db, saveDB, isOwner, msg, sock })
   })
 }
