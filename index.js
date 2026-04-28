@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 // ★ CONFIGURACIÓN DEL OWNER ★
-const OWNER_NUMBER = '595993XXXXXX' // Cambia por tu número sin + ni espacios
+const OWNER_NUMBER = '595993633752' // Cambia por tu número sin + ni espacios
 
 // Base de datos simple en JSON
 const DB_PATH = './database.json'
