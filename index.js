@@ -12,7 +12,6 @@ const fs = require('fs')
 
 const logger = pino({ level: 'silent' })
 
-// ★ TU NÚMERO (sin + ni espacios) ★
 const OWNER_NUMBER = process.env.OWNER_NUMBER || '595993633752'
 
 const DB_PATH = './database.json'
@@ -25,6 +24,8 @@ function saveDB(data) {
 }
 
 const rpgCommands = require('./commands/rpg')
+
+let yaVinculado = false
 
 async function conectarBot() {
     const { version } = await fetchLatestBaileysVersion()
@@ -45,16 +46,19 @@ async function conectarBot() {
 
     sock.ev.on('creds.update', saveCreds)
 
-    // ★ CÓDIGO DE 8 DÍGITOS AUTOMÁTICO ★
-    if (!sock.authState.creds.registered) {
-        await new Promise(r => setTimeout(r, 15000))
+    // ★ CÓDIGO DE VINCULACIÓN — SOLO UNA VEZ ★
+    if (!sock.authState.creds.registered && !yaVinculado) {
+        yaVinculado = true
+        console.log('⏳ Esperando 5 segundos antes de generar código...')
+        await new Promise(r => setTimeout(r, 5000))
         try {
             const code = await sock.requestPairingCode(OWNER_NUMBER)
             console.log('\n★━━━━━━━━━━━━━━━━━━━━━━★')
             console.log('  CÓDIGO DE VINCULACIÓN:')
             console.log(`       ${code}`)
             console.log('★━━━━━━━━━━━━━━━━━━━━━━★')
-            console.log('WhatsApp → Dispositivos vinculados → Vincular con número\n')
+            console.log('WhatsApp → Dispositivos vinculados → Vincular con número')
+            console.log('⏳ Tienes 60 segundos para ingresar el código\n')
         } catch (e) {
             console.log('❌ Error al generar código:', e.message)
             process.exit(1)
@@ -66,18 +70,27 @@ async function conectarBot() {
 
         if (connection === 'close') {
             const codigo = lastDisconnect?.error?.output?.statusCode
-            const reconectar = codigo !== DisconnectReason.loggedOut
-            if (reconectar) {
-                console.log('🔄 Reconectando...')
-                setTimeout(() => conectarBot(), 3000)
-            } else {
+
+            // ★ SI AÚN NO ESTÁ VINCULADO, NO RECONECTAR ★
+            if (!sock.authState.creds.registered) {
+                console.log('⏳ Código no ingresado a tiempo. Reiniciando en 5 segundos...')
+                yaVinculado = false
+                setTimeout(() => conectarBot(), 5000)
+                return
+            }
+
+            if (codigo === DisconnectReason.loggedOut) {
                 console.log('❌ Sesión cerrada. Borra auth_info y reinicia.')
                 process.exit(0)
+            } else {
+                console.log('🔄 Reconectando...')
+                setTimeout(() => conectarBot(), 5000)
             }
         }
 
         if (connection === 'open') {
             console.log('✅ ★VĮŁŁĄŁƁĄ★ Bot conectado!')
+            yaVinculado = false
         }
     })
 
